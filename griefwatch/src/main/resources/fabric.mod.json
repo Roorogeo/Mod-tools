@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "griefwatch",
+  "version": "${version}",
+  "name": "GriefWatch",
+  "description": "Server-side logging of online players and grief tools (TNT, end crystals, ...) to file and Discord.",
+  "authors": [
+    "roorogeo"
+  ],
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "io.github.roorogeo.griefwatch.GriefWatch"
+    ]
+  },
+  "mixins": [
+    "griefwatch.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
