@@ -3,6 +3,8 @@
   "package": "io.github.roorogeo.griefwatch.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+    "FireBlockMixin",
+    "ServerLevelMixin",
     "ServerPlayerGameModeMixin"
   ],
   "injectors": {
