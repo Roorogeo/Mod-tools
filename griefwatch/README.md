@@ -23,6 +23,8 @@ Fires and casts are reported once they pass a size threshold, then summarised wh
 [CAST-SUMMARY] Lava cast by Alex: 1204 blocks formed near 11, 150, 10 in overworld over 9m 3s (area 14x99x12) (...)
 ```
 
+**GriefWatch only watches and reports.** It never bans, kicks or punishes anyone, never blocks or undoes an action, and never changes the world. Everything it sees goes to the log file and Discord, and what to do about it is up to your staff.
+
 Only the server needs the mod. Players join with a vanilla client.
 
 ## Requirements
