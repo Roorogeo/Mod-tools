@@ -27,6 +27,8 @@ public final class GriefWatchConfig {
 	public PlayerLog playerLog = new PlayerLog();
 	public GriefLog griefLog = new GriefLog();
 	public Deduplication deduplication = new Deduplication();
+	public FireLog fireLog = new FireLog();
+	public CastLog castLog = new CastLog();
 	public Discord discord = new Discord();
 	public FileLog fileLog = new FileLog();
 
@@ -51,6 +53,58 @@ public final class GriefWatchConfig {
 		public int windowSeconds = 30;
 		/** Hard cap on how long one group may stay open, so a non-stop griefer still gets periodic summaries. */
 		public int maxGroupSeconds = 600;
+	}
+
+	/** Settings shared by the fire and lava-cast detectors. */
+	public abstract static class AreaLog {
+		public boolean enabled = true;
+		/** Number of blocks before an alert is sent. */
+		public int alertThreshold;
+		/** Blocks within this distance of an active area count towards it. */
+		public double joinRadius;
+		/** Horizontal distance from where a player lit a fire / poured a fluid for the area to be blamed on them. */
+		public double sourceRadius;
+		/** Vertical distance allowed between that spot and the area. */
+		public double sourceHeight;
+		/** An area is summarised after this long with no new blocks. */
+		public int idleSeconds;
+		/** How long a player's fire or fluid placement is remembered for attribution. */
+		public int sourceMaxAgeSeconds;
+		/** Hard cap on how long one area stays open. */
+		public int maxAreaSeconds = 3600;
+		/** Also report areas no player could be linked to (lightning, lava pools, dispensers). */
+		public boolean logUnattributed;
+		/** Items whose use marks the player as a possible source. */
+		public List<String> sourceItems = new ArrayList<>();
+	}
+
+	public static final class FireLog extends AreaLog {
+		public FireLog() {
+			alertThreshold = 48;
+			joinRadius = 12;
+			sourceRadius = 32;
+			sourceHeight = 32;
+			idleSeconds = 60;
+			sourceMaxAgeSeconds = 900;
+			logUnattributed = true;
+			sourceItems = new ArrayList<>(List.of("minecraft:flint_and_steel", "minecraft:fire_charge", "minecraft:lava_bucket"));
+		}
+	}
+
+	public static final class CastLog extends AreaLog {
+		/** Blocks that count when lava and water make them. */
+		public List<String> castBlocks = new ArrayList<>(List.of("minecraft:cobblestone", "minecraft:stone", "minecraft:obsidian", "minecraft:basalt"));
+
+		public CastLog() {
+			alertThreshold = 48;
+			joinRadius = 8;
+			sourceRadius = 24;
+			sourceHeight = 128;
+			idleSeconds = 120;
+			sourceMaxAgeSeconds = 1800;
+			logUnattributed = false;
+			sourceItems = new ArrayList<>(List.of("minecraft:lava_bucket", "minecraft:water_bucket"));
+		}
 	}
 
 	public static final class Discord {
@@ -139,6 +193,11 @@ public final class GriefWatchConfig {
 		if (deduplication == null) deduplication = new Deduplication();
 		if (discord == null) discord = new Discord();
 		if (fileLog == null) fileLog = new FileLog();
+		if (fireLog == null) fireLog = new FireLog();
+		if (castLog == null) castLog = new CastLog();
+		sanitizeArea("fireLog", fireLog, new FireLog(), warnings);
+		sanitizeArea("castLog", castLog, new CastLog(), warnings);
+		castLog.castBlocks = cleanIds(castLog.castBlocks);
 		if (griefLog.watched == null) griefLog.watched = new ArrayList<>();
 
 		if (playerLog.intervalSeconds < 10) {
@@ -184,6 +243,32 @@ public final class GriefWatchConfig {
 			valid.add(rule);
 		}
 		griefLog.watched = valid;
+	}
+
+	private static void sanitizeArea(String name, AreaLog log, AreaLog defaults, List<String> warnings) {
+		if (log.alertThreshold < 1) {
+			warnings.add(name + ".alertThreshold must be >= 1; using " + defaults.alertThreshold + ".");
+			log.alertThreshold = defaults.alertThreshold;
+		}
+		if (!(log.joinRadius >= 1)) log.joinRadius = defaults.joinRadius;
+		if (!(log.sourceRadius >= 0)) log.sourceRadius = defaults.sourceRadius;
+		if (!(log.sourceHeight >= 0)) log.sourceHeight = defaults.sourceHeight;
+		if (log.idleSeconds < 1) log.idleSeconds = defaults.idleSeconds;
+		if (log.sourceMaxAgeSeconds < 1) log.sourceMaxAgeSeconds = defaults.sourceMaxAgeSeconds;
+		if (log.maxAreaSeconds < log.idleSeconds) log.maxAreaSeconds = Math.max(log.idleSeconds, defaults.maxAreaSeconds);
+		log.sourceItems = cleanIds(log.sourceItems);
+	}
+
+	private static List<String> cleanIds(List<String> ids) {
+		List<String> out = new ArrayList<>();
+		if (ids != null) {
+			for (String id : ids) {
+				if (id != null && !id.isBlank() && !out.contains(id.trim())) {
+					out.add(id.trim());
+				}
+			}
+		}
+		return out;
 	}
 
 	/** Blank stays blank (Discord off for that type); an unusable URL is reported and disabled. */

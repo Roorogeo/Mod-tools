@@ -3,6 +3,7 @@ package io.github.roorogeo.griefwatch.output;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.github.roorogeo.griefwatch.config.GriefWatchConfig;
+import io.github.roorogeo.griefwatch.core.AreaActivityTracker;
 import io.github.roorogeo.griefwatch.core.DedupTracker;
 import io.github.roorogeo.griefwatch.core.GriefEvent;
 import io.github.roorogeo.griefwatch.core.PlayerSnapshot;
@@ -122,6 +123,74 @@ public final class LogDispatcher {
 				discord.enqueue(url, embed);
 			}
 		}
+	}
+
+	/**
+	 * A large fire or lava/water cast. {@code kind} is "fire" or "cast".
+	 * Alerts go out when the area crosses its threshold; summaries when it goes quiet.
+	 */
+	public void areaReport(AreaActivityTracker.Report r) {
+		GriefWatchConfig cfg = config.get();
+		boolean fire = "fire".equals(r.kind());
+		AreaActivityTracker.Attribution who = r.attribution();
+		boolean known = who.playerName() != null;
+		String dim = GriefEvent.shortDimension(r.dimension());
+		String near = "near " + r.centerX() + ", " + r.centerY() + ", " + r.centerZ() + " in " + dim;
+		String area = r.sizeX() + "x" + r.sizeY() + "x" + r.sizeZ();
+
+		String text;
+		if (!r.summary()) {
+			text = fire
+					? "Large fire: " + r.count() + "+ blocks burned " + near
+							+ (known ? " (fire started by " + who.playerName() + ")" : " (cause unknown)")
+					: "Possible " + (known ? "lava cast by " + who.playerName() : "lava cast (source unknown)")
+							+ ": " + r.count() + "+ blocks formed by lava and water " + near;
+		} else {
+			String duration = formatDuration(r.durationMillis());
+			text = fire
+					? (known ? "Fire started by " + who.playerName() : "Fire of unknown cause") + " burned "
+							+ r.count() + " blocks " + near + " over " + duration + " (area " + area + ")"
+					: (known ? "Lava cast by " + who.playerName() : "Lava cast (source unknown)") + ": "
+							+ r.count() + " blocks formed " + near + " over " + duration + " (area " + area + ")";
+		}
+		String tag = (fire ? "[FIRE" : "[CAST") + (r.summary() ? "-SUMMARY] " : "] ");
+		String suffix = known
+				? " (" + who.playerId() + ", started at " + who.sourceX() + ", " + who.sourceY() + ", " + who.sourceZ() + ")"
+				: "";
+		toFile(cfg, tag + text + suffix);
+		if (cfg.griefLog.logToConsole) {
+			console.info("[GriefWatch] {}{}", tag, text);
+		}
+
+		if (cfg.discord.enabled && cfg.discord.sendGriefAlerts && (!r.summary() || cfg.discord.sendSummaries)) {
+			String url = cfg.discord.griefUrl();
+			if (!url.isEmpty()) {
+				String title = (fire ? "\uD83D\uDD25 " : "\uD83E\uDEA8 ") + (r.summary() ? "Summary: " : "")
+						+ (fire ? "Large fire" : "Lava/water cast") + (known ? " - " + who.playerName() : "");
+				JsonObject embed = embed(title, r.summary() ? cfg.discord.griefSummaryColor : cfg.discord.griefAlertColor, Instant.now());
+				embed.addProperty("description", escape(text));
+				JsonArray fields = new JsonArray();
+				if (known) {
+					fields.add(field("UUID", "`" + who.playerId() + "`", true));
+					fields.add(field(fire ? "Fire started at" : "Fluid placed at",
+							"`" + who.sourceX() + ", " + who.sourceY() + ", " + who.sourceZ() + "`", true));
+				}
+				fields.add(field(fire ? "Blocks burned" : "Blocks formed", String.valueOf(r.count()), true));
+				fields.add(field("Center", "`" + r.centerX() + ", " + r.centerY() + ", " + r.centerZ() + "`", true));
+				fields.add(field("Dimension", dim, true));
+				fields.add(field("Area", area, true));
+				embed.add("fields", fields);
+				discord.enqueue(url, embed);
+			}
+		}
+	}
+
+	static String formatDuration(long millis) {
+		long seconds = Math.max(1, Math.round(millis / 1000.0));
+		if (seconds < 60) return seconds + "s";
+		long minutes = seconds / 60;
+		if (minutes < 60) return minutes + "m " + (seconds % 60) + "s";
+		return (minutes / 60) + "h " + (minutes % 60) + "m";
 	}
 
 	/** Plain line for the file only (startup, reload notes). */
